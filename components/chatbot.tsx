@@ -89,7 +89,7 @@ export function Chatbot() {
         role: "assistant",
         content:
           err instanceof Error
-            ? `Sorry, I hit an error: ${err.message}. Please check that ANTHROPIC_API_KEY is set and try again.`
+            ? `Sorry, I hit an error: ${err.message}. Please check that GROQ_API_KEY is set and try again.`
             : "Sorry, something went wrong. Please try again in a moment.",
       };
       setMessages((prev) => [...prev, assistantMsg]);
@@ -125,7 +125,7 @@ export function Chatbot() {
                   </p>
                   <p className="flex items-center gap-1 text-xs text-violet-400">
                     <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
-                    Claude Sonnet · Online
+                    Llama 3.3 70B · Online
                   </p>
                 </div>
               </div>
@@ -248,7 +248,7 @@ export function Chatbot() {
               </div>
               <p className="mt-2 flex items-center justify-center gap-1 text-[10px] text-zinc-600">
                 <Sparkles className="h-3 w-3" />
-                Powered by Claude Sonnet
+                Powered by Groq
               </p>
             </form>
           </motion.div>

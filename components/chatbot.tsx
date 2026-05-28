@@ -17,44 +17,20 @@ type Message = {
   content: string;
 };
 
+const WELCOME_ID = "welcome";
+
 const quickReplies = [
   "What services do you offer?",
   "Pricing for AI agents?",
   "Book a strategy call",
 ];
 
-const botResponses: Record<string, string> = {
-  default:
-    "I'm Zaftrix AI — your intelligent guide to our global agency platform. I can help with services, pricing, timelines, or connecting you with our team. What would you like to explore?",
-  services:
-    "We offer five core pillars: **Web Design**, **AI Agents**, **Automation**, **SEO**, and **Dashboard Services**. Each is engineered for enterprise scale with AI at the core. Which interests you most?",
-  pricing:
-    "Our AI agent packages start from $2,400/month for SMBs, with custom enterprise tiers available. Free AI tools have no credit card required. Want me to schedule a personalized quote call?",
-  call:
-    "Excellent choice! I can connect you with a senior strategist within 24 hours. Share your email in chat or click 'Start Free' — our team operates across 120+ countries with 24/7 coverage.",
-  agents:
-    "Our AI agents handle customer support, sales outreach, research, and internal ops — deployed in days, trained on your data with full RAG pipelines. Average ROI: 340% in year one.",
-};
-
-function getResponse(input: string): string {
-  const lower = input.toLowerCase();
-  if (lower.includes("service") || lower.includes("offer"))
-    return botResponses.services;
-  if (lower.includes("pric") || lower.includes("cost"))
-    return botResponses.pricing;
-  if (lower.includes("call") || lower.includes("book") || lower.includes("meet"))
-    return botResponses.call;
-  if (lower.includes("agent") || lower.includes("ai"))
-    return botResponses.agents;
-  return botResponses.default;
-}
-
 export function Chatbot() {
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
-      id: "0",
+      id: WELCOME_ID,
       role: "assistant",
       content:
         "Welcome to Zaftrix! I'm your AI concierge. Ask me anything about our services, free tools, or how we can transform your business.",
@@ -68,27 +44,58 @@ export function Chatbot() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typing]);
 
-  const sendMessage = (text: string) => {
-    if (!text.trim()) return;
+  const sendMessage = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || typing) return;
 
     const userMsg: Message = {
-      id: Date.now().toString(),
+      id: `user-${Date.now()}`,
       role: "user",
-      content: text.trim(),
+      content: trimmed,
     };
+
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setTyping(true);
 
-    setTimeout(() => {
+    try {
+      const history = [...messages, userMsg]
+        .filter((m) => m.id !== WELCOME_ID)
+        .map(({ role, content }) => ({ role, content }));
+
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history }),
+      });
+
+      const data = (await res.json()) as { message?: string; error?: string };
+
+      if (!res.ok) {
+        throw new Error(data.error ?? "Something went wrong.");
+      }
+
       const assistantMsg: Message = {
-        id: (Date.now() + 1).toString(),
+        id: `assistant-${Date.now()}`,
         role: "assistant",
-        content: getResponse(text),
+        content:
+          data.message ??
+          "I couldn't generate a response. Please try again.",
       };
       setMessages((prev) => [...prev, assistantMsg]);
+    } catch (err) {
+      const assistantMsg: Message = {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content:
+          err instanceof Error
+            ? `Sorry, I hit an error: ${err.message}. Please check that ANTHROPIC_API_KEY is set and try again.`
+            : "Sorry, something went wrong. Please try again in a moment.",
+      };
+      setMessages((prev) => [...prev, assistantMsg]);
+    } finally {
       setTyping(false);
-    }, 900 + Math.random() * 600);
+    }
   };
 
   return (
@@ -118,7 +125,7 @@ export function Chatbot() {
                   </p>
                   <p className="flex items-center gap-1 text-xs text-violet-400">
                     <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
-                    Online · Responds instantly
+                    Claude Sonnet · Online
                   </p>
                 </div>
               </div>
@@ -194,7 +201,7 @@ export function Chatbot() {
               <div key="messages-end" ref={messagesEndRef} />
             </div>
 
-            {messages.length <= 2 && (
+            {messages.length <= 2 && !typing && (
               <div
                 key="chat-quick-replies"
                 className="flex flex-wrap gap-2 border-t border-violet-500/10 px-4 py-2"
@@ -204,7 +211,8 @@ export function Chatbot() {
                     key={q}
                     type="button"
                     onClick={() => sendMessage(q)}
-                    className="rounded-full border border-violet-500/20 bg-violet-500/5 px-3 py-1.5 text-xs text-muted transition-colors hover:border-violet-500/40 hover:text-white"
+                    disabled={typing}
+                    className="rounded-full border border-violet-500/20 bg-violet-500/5 px-3 py-1.5 text-xs text-muted transition-colors hover:border-violet-500/40 hover:text-white disabled:opacity-50"
                   >
                     {q}
                   </button>
@@ -216,7 +224,7 @@ export function Chatbot() {
               key="chat-form"
               onSubmit={(e) => {
                 e.preventDefault();
-                sendMessage(input);
+                void sendMessage(input);
               }}
               className="border-t border-violet-500/15 p-3"
             >
@@ -226,7 +234,8 @@ export function Chatbot() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Ask Zaftrix AI anything..."
-                  className="flex-1 rounded-xl border border-violet-500/20 bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-violet-500/50"
+                  disabled={typing}
+                  className="flex-1 rounded-xl border border-violet-500/20 bg-black/40 px-4 py-2.5 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-violet-500/50 disabled:opacity-50"
                 />
                 <button
                   type="submit"
@@ -239,7 +248,7 @@ export function Chatbot() {
               </div>
               <p className="mt-2 flex items-center justify-center gap-1 text-[10px] text-zinc-600">
                 <Sparkles className="h-3 w-3" />
-                Powered by Zaftrix Intelligence
+                Powered by Claude Sonnet
               </p>
             </form>
           </motion.div>
